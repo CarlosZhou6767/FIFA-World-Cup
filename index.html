@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="theme-color" content="#0c1525">
+    <!-- CSP: unsafe-inline 允许 ES Module 内联 DOM 操作；cdn.jsdelivr.net 加载 Chart.js；本地字体无需外部字体域 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' https://flagcdn.com data:; connect-src https://site.api.espn.com;">
+    <title>2026年美加墨世界杯 - 赛程展示</title>
+    <link rel="stylesheet" href="css/styles.css?v=12">
+    <!-- Chart.js: 赔率趋势折线图依赖，async 延迟加载不阻塞首屏渲染 -->
+    <script async src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" crossorigin="anonymous" integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC"></script>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="header__content">
+                <div class="header__logo">
+                    <h1><span class="header__trophy-icon">🏆</span> 2026 FIFA World Cup</h1>
+                </div>
+                <div class="header__clock" id="headerClock">
+                    <span class="header__clock-date" id="clockDate"></span>
+                    <span class="header__clock-time" id="clockTime"></span>
+                </div>
+                <nav class="nav" id="mainNav">
+                    <ul class="nav__list">
+                        <li><a href="#schedule" class="nav__link nav__link--active" data-view="schedule">赛程</a></li>
+                        <li><a href="#standings" class="nav__link" data-view="standings">积分榜</a></li>
+                        <li><a href="#predictions" class="nav__link" data-view="predictions">预测分析</a></li>
+                        <li><a href="#analysis" class="nav__link" data-view="analysis">赔率趋势</a></li>
+                    </ul>
+                </nav>
+                <button class="header__mobile-btn" id="mobileMenuBtn" aria-label="菜单" aria-expanded="false">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- 赛程视图：筛选栏 + 比赛列表 -->
+        <section class="filters-section" id="view-schedule-filters">
+            <div class="container">
+                <div class="filters__container">
+                    <div class="filters__group">
+                        <label class="filters__label" for="stageFilter">比赛阶段</label>
+                        <select id="stageFilter" class="filters__select">
+                            <option value="all">全部阶段</option>
+                            <option value="group">小组赛</option>
+                        </select>
+                    </div>
+                    <div class="filters__group">
+                        <label class="filters__label" for="groupFilter">小组</label>
+                        <select id="groupFilter" class="filters__select" name="groupFilter" autocomplete="off">
+                            <option value="all">全部小组</option>
+                            <option value="A">A组</option>
+                            <option value="B">B组</option>
+                            <option value="C">C组</option>
+                            <option value="D">D组</option>
+                            <option value="E">E组</option>
+                            <option value="F">F组</option>
+                            <option value="G">G组</option>
+                            <option value="H">H组</option>
+                            <option value="I">I组</option>
+                            <option value="J">J组</option>
+                            <option value="K">K组</option>
+                            <option value="L">L组</option>
+                        </select>
+                    </div>
+                    <div class="filters__group">
+                        <label class="filters__label" for="dateFilter">日期</label>
+                        <input type="date" id="dateFilter" class="filters__input" name="dateFilter" autocomplete="off">
+                    </div>
+                    <div class="filters__group filters__group--search">
+                        <label class="filters__label" for="searchInput">搜索队伍</label>
+                        <input type="text" id="searchInput" class="filters__input filters__input--search" name="searchInput" placeholder="请输入队伍名称……" autocomplete="off">
+                    </div>
+                    <button id="clearFilters" class="filters__clear-btn">清除筛选</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="schedule-section" id="schedule">
+            <div class="container">
+                <div class="schedule__header">
+                    <h2>赛事日程</h2>
+                    <div class="schedule__header-right">
+                        <div class="schedule__stats">
+                            <span id="matchCount">共 0 场比赛</span>
+                        </div>
+                        <button class="btn-refresh btn-refresh--page" id="btnRefreshSchedule" aria-label="刷新赛程数据" title="手动刷新赛程数据 / 显示自动刷新倒计时">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.65 2.35A8 8 0 1 0 16 8h-2a6 6 0 1 1-1.76-4.24L10 0h6v6l-2.35-3.65z" fill="currentColor"/></svg>
+                            <span class="btn-refresh__label">刷新赛程</span>
+                            <span class="btn-refresh__countdown" id="scheduleRefreshCountdown">180s</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="scheduleContainer" class="schedule__container" aria-live="polite" aria-label="赛程列表">
+                </div>
+            </div>
+        </section>
+
+        <!-- 积分榜视图：12组小组排名 -->
+        <section class="standings-section hidden" id="standings">
+            <div class="container">
+                <div class="schedule__header">
+                    <h2>小组积分榜</h2>
+                    <div class="schedule__header-right">
+                        <button class="btn-refresh btn-refresh--page" id="btnRefreshStandings" aria-label="刷新积分榜数据" title="手动刷新积分榜数据">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.65 2.35A8 8 0 1 0 16 8h-2a6 6 0 1 1-1.76-4.24L10 0h6v6l-2.35-3.65z" fill="currentColor"/></svg>
+                            <span class="btn-refresh__label">刷新积分</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="standingsContainer" class="standings__container" aria-live="polite" aria-label="积分榜">
+                </div>
+            </div>
+        </section>
+
+
+
+        <!-- 赔率分析视图：趋势图 + 关键指标 -->
+        <section class="analysis-section hidden" id="analysis">
+            <div class="container">
+                <div class="analysis-hero">
+                    <div class="pred-hero__left">
+                        <div class="pred-hero__eyebrow">赔率趋势中心</div>
+                        <h2 class="analysis-hero__title">追踪市场转折点</h2>
+                    </div>
+                    <div class="pred-hero__stats">
+                        <div class="pred-hero__stat">
+                            <span class="pred-hero__stat-value" id="anaCoveredMatches">--</span>
+                            <span class="pred-hero__stat-label">覆盖比赛</span>
+                        </div>
+                        <div class="pred-hero__stat">
+                            <span class="pred-hero__stat-value">实时</span>
+                            <span class="pred-hero__stat-label">数据更新</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="analysis__toolbar">
+                    <div class="analysis__filters">
+                        <div class="analysis__filter-group">
+                            <label for="filterOddsType">赔率类型</label>
+                            <select id="filterOddsType">
+                                <option value="moneyline">独赢</option>
+                                <option value="spread">让球</option>
+                                <option value="total">大小球</option>
+                            </select>
+                        </div>
+                        <div class="analysis__filter-group">
+                            <label for="oddsMatchSelect">比赛选择</label>
+                            <select id="oddsMatchSelect">
+                                <option value="">选择比赛...</option>
+                            </select>
+                        </div>
+                        <div class="analysis__filter-group">
+                            <label>平台</label>
+                            <div class="provider-tabs" id="providerTabs" role="tablist">
+                                <button class="provider-tabs__btn provider-tabs__btn--active" data-provider="draftkings" role="tab" aria-selected="true">DraftKings</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="analysis__toolbar-right">
+                        <button class="btn-refresh btn-refresh--page" id="btnRefreshAna" aria-label="刷新赔率数据" title="手动刷新赔率数据">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.65 2.35A8 8 0 1 0 16 8h-2a6 6 0 1 1-1.76-4.24L10 0h6v6l-2.35-3.65z" fill="currentColor"/></svg>
+                            <span class="btn-refresh__label">刷新赔率</span>
+                        </button>
+                        <button class="btn-export" id="btnExport" aria-label="导出数据" title="导出数据">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 7l4 4 4-4M2 13h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            导出
+                        </button>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="oddsTrendChart"></canvas>
+                </div>
+                <div class="odds-key-points" id="oddsKeyPoints"></div>
+            </div>
+        </section>
+
+        <!-- 预测视图：隐含概率 + 信心度 + 价值投注 -->
+        <section class="predictions-section hidden" id="predictions">
+            <div class="container">
+                <div class="pred-hero">
+                    <div class="pred-hero__left">
+                        <div class="pred-hero__eyebrow">AI 预测引擎</div>
+                        <h2 class="pred-hero__title">实时赔率分析</h2>
+                    </div>
+                    <div class="pred-hero__stats" id="predHeroStats">
+                        <div class="pred-hero__stat">
+                            <span class="pred-hero__stat-value" id="phTotalMatches">--</span>
+                            <span class="pred-hero__stat-label">待预测比赛</span>
+                        </div>
+                        <div class="pred-hero__stat">
+                            <span class="pred-hero__stat-value" id="phWithOdds">--</span>
+                            <span class="pred-hero__stat-label">有赔率数据</span>
+                        </div>
+                        <div class="pred-hero__stat">
+                            <span class="pred-hero__stat-value" id="phLastUpdate">--</span>
+                            <span class="pred-hero__stat-label">数据更新</span>
+                        </div>
+                    </div>
+                    <div class="pred-hero__refresh">
+                        <button class="btn-refresh btn-refresh--small" id="btnRefreshPred" aria-label="刷新赔率数据" title="手动刷新赔率数据">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.65 2.35A8 8 0 1 0 16 8h-2a6 6 0 1 1-1.76-4.24L10 0h6v6l-2.35-3.65z" fill="currentColor"/></svg>
+                            <span class="btn-refresh__label">刷新赔率</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="pred-filters-bar">
+                    <div class="pred-filters-bar__group">
+                        <label for="predStageFilter">比赛阶段</label>
+                        <select id="predStageFilter">
+                            <option value="all">全部</option>
+                            <option value="group" selected>小组赛</option>
+                        </select>
+                    </div>
+                    <div class="pred-filters-bar__group">
+                        <label for="predConfidenceFilter">信心度</label>
+                        <select id="predConfidenceFilter">
+                            <option value="all">全部</option>
+                            <option value="high">高 (≥65%)</option>
+                            <option value="med">中 (50-64%)</option>
+                            <option value="low">低 (<50%)</option>
+                        </select>
+                    </div>
+                    <div class="pred-filters-bar__group">
+                        <label for="predSortBy">排序</label>
+                        <select id="predSortBy">
+                            <option value="time">比赛时间</option>
+                            <option value="confidence">信心度</option>
+                            <option value="value">价值投注</option>
+                        </select>
+                    </div>
+                    <div class="pred-filters-bar__group pred-filters-bar__group--search">
+                        <label for="predSearchInput">搜索</label>
+                        <input type="text" id="predSearchInput" placeholder="搜索队伍...">
+                    </div>
+                </div>
+
+                <div class="pred-matches__container" id="predMatchesContainer" aria-live="polite" aria-label="预测比赛列表">
+                </div>
+            </div>
+        </section>
+
+
+    </main>
+
+    <!-- 赔率详情模态框：开盘/即时赔率对比 + 概率条 + 推荐 -->
+    <div class="modal" id="oddsModal" role="dialog" aria-modal="true" aria-labelledby="oddsModalTitle">
+        <div class="modal__overlay"></div>
+        <div class="modal__content">
+            <button class="modal__close" id="oddsModalClose" aria-label="关闭">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <line x1="2" y1="2" x2="14" y2="14"/>
+                    <line x1="14" y1="2" x2="2" y2="14"/>
+                </svg>
+            </button>
+            <div class="modal__header">
+                <div class="modal__title" id="oddsModalTitle">比赛赔率详情</div>
+            </div>
+            <div class="modal__body" id="oddsModalBody">
+                <div class="modal-loading">
+                    <div class="pred-spinner"></div>
+                    <span>正在加载赔率数据...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 比赛详情模态框：队伍信息 + 比分 + 赔率入口 -->
+    <div class="modal" id="matchModal" role="dialog" aria-modal="true" aria-labelledby="matchModalTitle">
+        <div class="modal__overlay"></div>
+        <div class="modal__content">
+            <button class="modal__close" id="modalClose" aria-label="关闭">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <line x1="2" y1="2" x2="14" y2="14"/>
+                    <line x1="14" y1="2" x2="2" y2="14"/>
+                </svg>
+            </button>
+            <h2 id="matchModalTitle" class="sr-only">比赛详情</h2>
+            <div id="matchDetails"></div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 美加墨世界杯 | 实时比分数据：ESPN</p>
+        </div>
+    </footer>
+
+    <!-- 头部实时时钟脚本：RAF 驱动，仅秒数变化时更新 DOM -->
+    <script>
+        (function() {
+            const clockDate = document.getElementById('clockDate');
+            const clockTime = document.getElementById('clockTime');
+            if (!clockDate || !clockTime) return;
+            let lastTimeStr = '';
+            function updateClock() {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('zh-CN', {
+                    hour12: false, timeZone: 'Asia/Shanghai'
+                });
+                if (timeStr !== lastTimeStr) {
+                    lastTimeStr = timeStr;
+                    clockTime.textContent = timeStr;
+                    clockDate.textContent = now.toLocaleDateString('zh-CN', {
+                        year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
+                        timeZone: 'Asia/Shanghai'
+                    });
+                }
+                requestAnimationFrame(updateClock);
+            }
+            requestAnimationFrame(updateClock);
+        })();
+    </script>
+    <!-- 脚本加载顺序: config.js(配置常量) → data.js(全局数据) → liveScores.js(实时轮询) → merged.js(主逻辑) -->
+    <script src="js/config.js" defer></script>
+    <script src="js/data.js" defer></script>
+    <script src="js/liveScores.js" defer></script>
+    <script src="js/merged.js" defer></script>
+
+</body>
+</html>
