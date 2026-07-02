@@ -2,11 +2,13 @@
  * @fileoverview FIFA 世界杯应用 — 全局配置常量
  * @description 集中管理所有硬编码参数、URL、文本映射、时间配置等，
  *              消除各模块间的重复定义，支撑 i18n 扩展与配置维护。
- *              在 data.js / liveScores.js / merged.js 之前加载。
+ *              在 data.js / liveScores.js / apiClient.js 之前加载。
  */
 
 (function () {
   'use strict';
+  window.App = window.App || {};
+  window.App.config = window.App.config || {};
 
   /* ---- API 相关 ---- */
   /** ESPN 世界杯比分板 API 基础地址 */
@@ -126,6 +128,46 @@
   /** 排名占位符映射（parsePlaceholderAbbr 用） */
   var RANK_MAP = { '1': '第1名', '2': '第2名', '3': '第3名' };
 
+  /** ESPN 队伍缩写 → 内部队伍 ID 映射（与 data.js 一致） */
+  var TEAM_MAP = {
+    // A组
+    'MEX': 'MEX', 'RSA': 'RSA', 'KOR': 'KOR', 'CZE': 'CZE',
+    // B组
+    'CAN': 'CAN', 'BIH': 'BIH', 'QAT': 'QAT', 'SUI': 'SUI',
+    // C组
+    'BRA': 'BRA', 'MAR': 'MAR', 'HAI': 'HAI', 'SCO': 'SCO',
+    // D组
+    'USA': 'USA', 'PAR': 'PAR', 'AUS': 'AUS', 'TUR': 'TUR',
+    // E组
+    'GER': 'GER', 'CUW': 'CUW', 'CIV': 'CIV', 'ECU': 'ECU',
+    // F组
+    'NED': 'NED', 'JPN': 'JPN', 'SWE': 'SWE', 'TUN': 'TUN',
+    // G组
+    'BEL': 'BEL', 'EGY': 'EGY', 'IRN': 'IRN', 'NZL': 'NZL',
+    // H组
+    'ESP': 'ESP', 'CPV': 'CPV', 'KSA': 'KSA', 'URU': 'URU',
+    // I组
+    'FRA': 'FRA', 'SEN': 'SEN', 'IRQ': 'IRQ', 'NOR': 'NOR',
+    // J组
+    'ARG': 'ARG', 'ALG': 'ALG', 'AUT': 'AUT', 'JOR': 'JOR',
+    // K组
+    'POR': 'POR', 'COD': 'COD', 'UZB': 'UZB', 'COL': 'COL',
+    // L组
+    'ENG': 'ENG', 'CRO': 'CRO', 'GHA': 'GHA', 'PAN': 'PAN',
+    // 其他可能出现在赔率数据中的队伍
+    'CHI': 'CHI', 'PER': 'PER', 'CRC': 'CRC', 'ITA': 'ITA',
+    'DEN': 'DEN', 'POL': 'POL', 'SRB': 'SRB', 'WAL': 'WAL',
+    'UAE': 'UAE', 'NGA': 'NGA', 'CMR': 'CMR',
+    // 特殊映射: 沙特阿拉伯(ESPN可能使用KSA)
+    'SAU': 'KSA'
+  };
+
+  /** 世界杯场馆 ID 集合，用于验证 ESPN 返回的场馆是否为世界杯场馆 */
+  var ESPN_VENUE_IDS = new Set([
+    '4727', '9115', '3871', '7485', '6262', '10897', '5960', '4485',
+    '1421', '10660', '4643', '10143', '4370', '1672', '5009', '6351'
+  ]);
+
   /** ESPN 状态 → 内部统一状态映射 */
   var ESPN_STATUS_MAP = {
     'pre':     'scheduled',
@@ -219,20 +261,6 @@
     [/\bto\b/gi, '至']
   ];
 
-  /* ---- 出线概率查表（predictGroupAdvanceProb 用） ---- */
-  var ADVANCE_PROB_TABLE = {
-    0: [15, 5, 0],
-    1: [25, 12, 3],
-    2: [35, 18, 5],
-    3: [50, 30, 10],
-    4: [65, 45, 20],
-    5: [75, 55, 28],
-    6: [85, 70, 40],
-    7: [92, 80, 55],
-    8: [96, 90, 70],
-    9: [99, 97, 90]
-  };
-
   /* ---- 赋值到 window ---- */
   window.CONFIG = {
     ESPN_API_BASE: ESPN_API_BASE,
@@ -259,7 +287,12 @@
     ESPN_STATUS_DETAIL: ESPN_STATUS_DETAIL,
     MINUTE_REGEX: MINUTE_REGEX,
     TOTAL_GROUP_GAMES: TOTAL_GROUP_GAMES,
-    ODDS_TRANSLATIONS: ODDS_TRANSLATIONS,
-    ADVANCE_PROB_TABLE: ADVANCE_PROB_TABLE
+    ODDS_TRANSLATIONS: ODDS_TRANSLATIONS
   };
+  window.TEAM_MAP = TEAM_MAP;
+  window.ESPN_VENUE_IDS = ESPN_VENUE_IDS;
+
+  window.App.config.CONFIG = CONFIG;
+  window.App.config.TEAM_MAP = TEAM_MAP;
+  window.App.config.ESPN_VENUE_IDS = ESPN_VENUE_IDS;
 })();

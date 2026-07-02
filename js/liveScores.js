@@ -3,6 +3,8 @@
  * 管理本地缓存与 TTL 过期策略，支持自动刷新倒计时与页面可见性感知，
  * 并将标准化后的比分数据同步到全局 WORLD_CUP_DATA。
  */
+window.App = window.App || {};
+window.App.liveScores = window.App.liveScores || {};
 
 /** ESPN 世界杯比分板 API 基础地址 */
 const ESPN_API_BASE = window.CONFIG.ESPN_API_BASE;
@@ -52,7 +54,7 @@ function isMatchInOurWorldCup(event) {
 
 /**
  * 将 ESPN 赛事数据标准化为内部统一格式
- * 主体委托给 merged.js 的 transformEspnEvent 以消除重复解析逻辑，
+ * 主体委托给 apiClient.js 的 transformEspnEvent 以消除重复解析逻辑，
  * 仅保留 liveScores.js 特有的队伍过滤和字段映射
  * @param {Object} event - ESPN 赛事对象
  * @returns {Object|null} 标准化后的比赛对象，不属于本届世界杯或队伍不在跟踪列表则返回 null
@@ -72,7 +74,7 @@ function standardizeEvent(event) {
     const date = (event.date || '').slice(0, 10);
     const venueId = competition.venue && competition.venue.id ? String(competition.venue.id) : null;
 
-    // 委托给 merged.js 的 transformEspnEvent（如果已加载），获取共享解析结果
+    // 委托给 apiClient.js 的 transformEspnEvent（如果已加载），获取共享解析结果
     let homeScore = null, awayScore = null, status = 'scheduled', minute = null;
     let espnStatusName = '', espnStatusDesc = '';
     if (typeof window.__espnHelpers?.transformEspnEvent === 'function') {
@@ -86,7 +88,7 @@ function standardizeEvent(event) {
             espnStatusDesc = shared._espnStatusDesc || '';
         }
     } else {
-        // merged.js 未加载时的独立回退解析
+        // apiClient.js 未加载时的独立回退解析
         status = (function() {
             const st = competition.status;
             if (!st) return 'scheduled';
@@ -134,12 +136,14 @@ function standardizeEvent(event) {
  * - lastFetch: 上次成功拉取的时间戳，用于 TTL 过期判断
  * - inFlight: 当前进行中的请求 Promise，防止并发堆积
  * - listeners: 比分更新回调列表
+ * - abortController: 请求中断控制器，用于取消上一次未完成的请求
  */
 const cache = {
     matches: new Map(),
     lastFetch: 0,
     inFlight: null,
     listeners: [],
+    abortController: null,
 };
 
 /**
@@ -158,6 +162,12 @@ async function fetchAllCurrentScores({ force = false } = {}) {
         return Array.from(cache.matches.values());
     }
 
+    if (cache.abortController) {
+        try { cache.abortController.abort(); } catch(e) {}
+    }
+    cache.abortController = new AbortController();
+    var signal = cache.abortController.signal;
+
     cache.inFlight = (async () => {
         // 单次日期范围查询优化：一次性拉取整个赛程，避免按天拆分产生多次 API 调用
         const startDate = '20260611';
@@ -165,13 +175,13 @@ async function fetchAllCurrentScores({ force = false } = {}) {
         const dateRange = `${startDate}-${endDate}`;
 
         try {
-            // 复用 merged.js 的 espnCache，避免重复 API 请求
+            // 复用 apiClient.js 的 espnCache，避免重复 API 请求
             let data;
-            if (typeof espnCache !== 'undefined' && espnCache.fetch) {
-                data = await espnCache.fetch(dateRange, 200, force);
+            if (typeof window.espnCache !== 'undefined' && window.espnCache.fetch) {
+                data = await window.espnCache.fetch(dateRange, 200, force);
             } else {
                 const url = `${ESPN_API_BASE}/scoreboard?dates=${dateRange}&limit=200`;
-                const resp = await fetch(url, { cache: force ? 'no-store' : 'default' });
+                const resp = await fetch(url, { cache: force ? 'no-store' : 'default', signal: signal });
                 if (!resp.ok) return [];
                 data = await resp.json();
             }
@@ -184,6 +194,7 @@ async function fetchAllCurrentScores({ force = false } = {}) {
             cache.lastFetch = Date.now();
             return standardized;
         } catch (err) {
+            if (err.name === 'AbortError') return [];
             return [];
         }
     })();
@@ -192,6 +203,7 @@ async function fetchAllCurrentScores({ force = false } = {}) {
         return await cache.inFlight;
     } finally {
         cache.inFlight = null;
+        cache.abortController = null;
     }
 }
 
@@ -309,3 +321,4 @@ window.LiveScores = {
     onLiveScoresUpdate,
     POLL_INTERVAL_MS,
 };
+window.App.liveScores.LiveScores = LiveScores;

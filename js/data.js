@@ -3,6 +3,8 @@
  * @description 提供 2026 年 FIFA 世界杯的参赛队伍、比赛场馆、赛程安排等静态数据，
  *              以及基于这些数据构建的查找索引和辅助工具函数。
  */
+window.App = window.App || {};
+window.App.data = window.App.data || {};
 
 /**
  * 世界杯核心数据
@@ -741,7 +743,7 @@ const WORLD_CUP_DATA = {
         },
         {
             id: 59,
-            date: '2026-06-25',
+            date: '2026-06-26',
             time: '10:00',
             homeTeam: 'TUR',
             awayTeam: 'USA',
@@ -752,7 +754,7 @@ const WORLD_CUP_DATA = {
         },
         {
             id: 60,
-            date: '2026-06-25',
+            date: '2026-06-26',
             time: '10:00',
             homeTeam: 'PAR',
             awayTeam: 'AUS',
@@ -1263,49 +1265,6 @@ const WORLD_CUP_DATA = {
 };
 
 /**
- * 根据队伍 ID 查找队伍信息，未找到时返回兜底对象
- * @param {string} teamId       - 队伍 ID（如 'BRA'）
- * @param {string} [fallbackName] - 兜底显示名称（来自 ESPN 等外部数据源）
- * @returns {Object} 队伍对象，包含 name、flag、code 字段
- */
-function getTeamById(teamId, fallbackName) {
-    const team = WORLD_CUP_DATA.teams.find(team => team.id === teamId);
-    if (team) return team;
-    // 外部数据源提供的名称作为兜底
-    const name = fallbackName || teamId;
-    return { name: name, flag: '', code: teamId };
-}
-
-/**
- * 根据场馆 ID 查找场馆信息
- * @param {string} venueId - 场馆 ID
- * @returns {Object} 场馆对象，包含 name、city、capacity 字段
- */
-function getVenueById(venueId) {
-    return WORLD_CUP_DATA.venues.find(venue => venue.id === venueId) || { name: venueId, city: '', capacity: 0 };
-}
-
-/**
- * 获取比赛阶段的中文显示名称
- * @param {string} stage - 阶段标识（如 'group'、'round16'、'final'）
- * @returns {string} 阶段中文名称
- */
-function getStageName(stage) {
-    var stageNames = window.CONFIG.STAGE_NAMES;
-    return stageNames[stage] || stage;
-}
-
-/**
- * 获取比赛状态的中文显示文本
- * @param {string} status - 状态标识（如 'scheduled'、'live'、'finished'）
- * @returns {string} 状态中文文本
- */
-function getStatusText(status) {
-    var statusNames = window.CONFIG.STATUS_NAMES;
-    return statusNames[status] || status;
-}
-
-/**
  * 获取场馆所在时区信息
  * @param {string} venueId - 场馆 ID
  * @returns {Object} 时区信息，包含 offset（UTC 偏移小时数）、name（时区缩写）、city（城市名）
@@ -1330,6 +1289,13 @@ function formatDate(date) {
  * 根据已完赛的小组赛结果计算各组积分排名
  * @param {Array<Object>} [matchesData] - 比赛数据数组，不传则使用本地 WORLD_CUP_DATA.matches
  * @returns {Object} 各组排名，键为小组名（'A'-'L'），值为按规则排序的队伍积分数组
+ *
+ * 排序规则（与 FIFA 官方规则一致）：
+ * 1. 积分（points）降序
+ * 2. 净胜球（goalDifference）降序
+ * 3. 进球数（goalsFor）降序
+ * 4. 相互交锋成绩（H2H）：积分→净胜球
+ * 5. 队名（name）升序（localeCompare）
  */
 function calculateStandings(matchesData) {
     const standings = {};
@@ -1398,7 +1364,7 @@ function calculateStandings(matchesData) {
                 (m.homeTeam === a.team.id && m.awayTeam === b.team.id) ||
                 (m.homeTeam === b.team.id && m.awayTeam === a.team.id)
             );
-            let aPts = 0, bPts = 0, aGD = 0, bGF = 0;
+            let aPts = 0, bPts = 0, aGD = 0;
             h2hMatches.forEach(m => {
                 const aScore = m.homeTeam === a.team.id ? (m.homeScore || 0) : (m.awayScore || 0);
                 const bScore = m.homeTeam === b.team.id ? (m.homeScore || 0) : (m.awayScore || 0);
@@ -1406,18 +1372,9 @@ function calculateStandings(matchesData) {
                 else if (aScore < bScore) bPts += 3;
                 else { aPts += 1; bPts += 1; }
                 aGD += aScore - bScore;
-                bGF += bScore;
             });
             if (bPts !== aPts) return bPts - aPts;
-            if (aGD !== (h2hMatches.length > 0 ? -aGD : 0)) {
-                let bGD = 0;
-                h2hMatches.forEach(m => {
-                    const bScore2 = m.homeTeam === b.team.id ? (m.homeScore || 0) : (m.awayScore || 0);
-                    const aScore2 = m.homeTeam === a.team.id ? (m.homeScore || 0) : (m.awayScore || 0);
-                    bGD += bScore2 - aScore2;
-                });
-                if (bGD !== aGD) return bGD - aGD;
-            }
+            if (aGD !== 0) return -aGD;
             return 0;
         }
 
@@ -1464,8 +1421,24 @@ WORLD_CUP_DATA.matches.forEach(m => {
  */
 const TEAM_INDEX = new Set(WORLD_CUP_DATA.teams.map(t => t.id));
 
+const TEAM_BY_ID = new Map(WORLD_CUP_DATA.teams.map(t => [t.id, t]));
+const VENUE_BY_ID = new Map(WORLD_CUP_DATA.venues.map(v => [v.id, v]));
+
 // 挂载到 window，使 ES Module 可通过 window 访问（const/let 在 script 标签中不会自动成为全局变量）
 window.WORLD_CUP_DATA = WORLD_CUP_DATA;
 window.MATCH_INDEX_BY_ID = MATCH_INDEX_BY_ID;
 window.MATCH_INDEX_BY_DATE_TEAMS = MATCH_INDEX_BY_DATE_TEAMS;
 window.TEAM_INDEX = TEAM_INDEX;
+window.TEAM_BY_ID = TEAM_BY_ID;
+window.VENUE_BY_ID = VENUE_BY_ID;
+window.formatDate = formatDate;
+window.calculateStandings = calculateStandings;
+
+window.App.data.WORLD_CUP_DATA = WORLD_CUP_DATA;
+window.App.data.MATCH_INDEX_BY_ID = MATCH_INDEX_BY_ID;
+window.App.data.MATCH_INDEX_BY_DATE_TEAMS = MATCH_INDEX_BY_DATE_TEAMS;
+window.App.data.TEAM_INDEX = TEAM_INDEX;
+window.App.data.TEAM_BY_ID = TEAM_BY_ID;
+window.App.data.VENUE_BY_ID = VENUE_BY_ID;
+window.App.data.formatDate = formatDate;
+window.App.data.calculateStandings = calculateStandings;
